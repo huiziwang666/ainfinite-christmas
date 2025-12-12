@@ -1,4 +1,4 @@
-import React, { useMemo, useRef } from 'react';
+import { memo, useMemo, useRef } from 'react';
 import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
 import { useGame } from '../context/GameContext';
@@ -24,7 +24,7 @@ function createSnowflakeTexture() {
   return texture;
 }
 
-export const SnowSystem: React.FC = () => {
+export const SnowSystem = memo(() => {
   const { snowConfig } = useGame();
   const pointsRef = useRef<THREE.Points>(null);
   
@@ -145,4 +145,4 @@ export const SnowSystem: React.FC = () => {
       />
     </points>
   );
-};
+});

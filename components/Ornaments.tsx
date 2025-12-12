@@ -1,36 +1,78 @@
-import React, { useMemo, useRef, useLayoutEffect, useState, useEffect } from 'react';
+import { memo, useMemo, useRef, useLayoutEffect } from 'react';
 import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
 import { useGame } from '../context/GameContext';
 import { GameState, ItemType } from '../types';
 import { generateOrnaments } from '../utils/geometry';
 
-// Easing function: easeInOutCubic
-const easeInOutCubic = (x: number): number => {
-  return x < 0.5 ? 4 * x * x * x : 1 - Math.pow(-2 * x + 2, 3) / 2;
-};
-
-// Better Ribbon Geometry: Cross Wrap + Large Bow
+// Realistic Ribbon Geometry: Flat crossed ribbons with bow loops and tails
 const createRibbonGeometry = () => {
-  // Band 1: Vertical loop around X axis (wraps top/bottom)
-  // Box is 1x1x1 centered at 0.
-  const band1Geo = new THREE.BoxGeometry(1.02, 1.02, 0.15);
-  // Band 2: Vertical loop around Z axis (wraps top/bottom)
-  const band2Geo = new THREE.BoxGeometry(0.15, 1.02, 1.02);
+  const geometries: THREE.BufferGeometry[] = [];
 
-  // Bow: Large loops on top
-  const bowGeo = new THREE.TorusKnotGeometry(0.3, 0.08, 64, 8, 2, 3);
-  bowGeo.rotateX(Math.PI / 2);
-  bowGeo.translate(0, 0.65, 0); // Sit on top
+  // Cross ribbons - flat bands that wrap around the box
+  // Ribbon 1: Wraps around X axis (front to back over top)
+  const ribbon1 = new THREE.BoxGeometry(1.04, 0.12, 0.04);
+  ribbon1.translate(0, 0.52, 0); // Top face
+  geometries.push(ribbon1);
 
-  const targetGeo = new THREE.BufferGeometry();
-  const geometries = [band1Geo, band2Geo, bowGeo];
+  const ribbon1Front = new THREE.BoxGeometry(0.12, 1.04, 0.04);
+  ribbon1Front.translate(0, 0, 0.52); // Front face
+  geometries.push(ribbon1Front);
+
+  const ribbon1Back = new THREE.BoxGeometry(0.12, 1.04, 0.04);
+  ribbon1Back.translate(0, 0, -0.52); // Back face
+  geometries.push(ribbon1Back);
+
+  // Ribbon 2: Wraps around Z axis (left to right over top)
+  const ribbon2 = new THREE.BoxGeometry(0.04, 0.12, 1.04);
+  ribbon2.translate(0, 0.52, 0); // Top face (perpendicular)
+  geometries.push(ribbon2);
+
+  const ribbon2Left = new THREE.BoxGeometry(0.04, 1.04, 0.12);
+  ribbon2Left.translate(-0.52, 0, 0); // Left face
+  geometries.push(ribbon2Left);
+
+  const ribbon2Right = new THREE.BoxGeometry(0.04, 1.04, 0.12);
+  ribbon2Right.translate(0.52, 0, 0); // Right face
+  geometries.push(ribbon2Right);
+
+  // Bow center knot
+  const knotGeo = new THREE.SphereGeometry(0.12, 12, 12);
+  knotGeo.scale(1, 0.7, 1);
+  knotGeo.translate(0, 0.58, 0);
+  geometries.push(knotGeo);
+
+  // Bow loops - two torus arcs for the loops
+  const loopLeft = new THREE.TorusGeometry(0.18, 0.04, 8, 16, Math.PI);
+  loopLeft.rotateZ(Math.PI / 2);
+  loopLeft.rotateY(Math.PI / 4);
+  loopLeft.translate(-0.15, 0.7, 0);
+  geometries.push(loopLeft);
+
+  const loopRight = new THREE.TorusGeometry(0.18, 0.04, 8, 16, Math.PI);
+  loopRight.rotateZ(-Math.PI / 2);
+  loopRight.rotateY(-Math.PI / 4);
+  loopRight.translate(0.15, 0.7, 0);
+  geometries.push(loopRight);
+
+  // Bow tails - curved ribbons hanging down
+  const tailLeft = new THREE.BoxGeometry(0.08, 0.25, 0.02);
+  tailLeft.rotateZ(0.4);
+  tailLeft.translate(-0.2, 0.48, 0);
+  geometries.push(tailLeft);
+
+  const tailRight = new THREE.BoxGeometry(0.08, 0.25, 0.02);
+  tailRight.rotateZ(-0.4);
+  tailRight.translate(0.2, 0.48, 0);
+  geometries.push(tailRight);
+
+  // Merge all geometries
   let totalVerts = 0;
   geometries.forEach(g => totalVerts += g.attributes.position.count);
 
   const positions = new Float32Array(totalVerts * 3);
   const normals = new Float32Array(totalVerts * 3);
-  
+
   let offset = 0;
   geometries.forEach(g => {
     const p = g.attributes.position.array;
@@ -40,36 +82,23 @@ const createRibbonGeometry = () => {
     offset += g.attributes.position.count;
   });
 
+  const targetGeo = new THREE.BufferGeometry();
   targetGeo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
   targetGeo.setAttribute('normal', new THREE.BufferAttribute(normals, 3));
+
+  // Dispose intermediate geometries to free memory
+  geometries.forEach(g => g.dispose());
+
   return targetGeo;
 };
 
-export const Ornaments: React.FC = () => {
-  const { gameState, showcaseConfig } = useGame();
-  
+export const Ornaments = memo(() => {
+  const { gameState, isIndexUp } = useGame();
+
   const groupRef = useRef<THREE.Group>(null);
 
-  // Showcase state refs (animation controller)
-  const isShowcasing = useRef(false);
-  const showcaseStartRotation = useRef(0);
-  const showcaseStartTime = useRef(0);
-
-  // Watch for trigger timestamp updates
-  useEffect(() => {
-    if (showcaseConfig.triggerTimestamp > 0 && groupRef.current) {
-      isShowcasing.current = true;
-      showcaseStartRotation.current = groupRef.current.rotation.y;
-      showcaseStartTime.current = performance.now(); // High precision time
-    }
-  }, [showcaseConfig.triggerTimestamp]);
-
-  // Cancel showcase if user scatters
-  useEffect(() => {
-    if (gameState === GameState.SCATTERED) {
-      isShowcasing.current = false;
-    }
-  }, [gameState]);
+  // Stable spin speed (radians per second)
+  const SPIN_SPEED = 1.5;
 
   // Refs for Instances
   const foliageRef = useRef<THREE.InstancedMesh>(null);
@@ -138,33 +167,14 @@ export const Ornaments: React.FC = () => {
     
     // --- ROTATION LOGIC ---
     if (groupRef.current) {
-        if (isShowcasing.current) {
-          // SHOWCASE MODE (Index Show)
-          const now = performance.now();
-          const elapsed = (now - showcaseStartTime.current) / 1000;
-          const progress = Math.min(elapsed / showcaseConfig.duration, 1.0);
-          
-          const eased = easeInOutCubic(progress);
-          groupRef.current.rotation.y = showcaseStartRotation.current + (eased * Math.PI * 2);
-          
-          if (progress >= 1.0) {
-            isShowcasing.current = false;
-            // Ensure exact rotation finish
-            groupRef.current.rotation.y = showcaseStartRotation.current + Math.PI * 2;
-            groupRef.current.rotation.y %= (Math.PI * 2);
-          }
-        } else {
-          // NORMAL MODE
-          // If Scattered: Drift slowly.
-          // If Tree (Fist): STOP spin.
-          if (!isTree) {
-             groupRef.current.rotation.y += delta * 0.1; // Slow drift when scattered
-          } else {
-             // Tree mode: No spin unless showcased
-             // We can optionally interpolate to a stop if we wanted smooth stop, 
-             // but instantaneous stop is more responsive to "Tree should not spin".
-          }
+        if (isIndexUp && isTree) {
+          // INDEX UP: Continuous stable spin
+          groupRef.current.rotation.y += delta * SPIN_SPEED;
+        } else if (!isTree) {
+          // SCATTERED: Slow drift
+          groupRef.current.rotation.y += delta * 0.1;
         }
+        // TREE without index: No spin (stationary)
     }
 
     // --- INSTANCE UPDATES ---
@@ -268,22 +278,32 @@ export const Ornaments: React.FC = () => {
         <meshStandardMaterial color="#fbbf24" emissive="#fbbf24" emissiveIntensity={3} toneMapped={false} />
       </instancedMesh>
 
-      {/* 4. GIFTS */}
+      {/* 4. GIFTS - Shiny wrapping paper look */}
       <instancedMesh ref={giftRef} args={[undefined, undefined, giftIndices.length]} castShadow receiveShadow>
         <boxGeometry args={[1, 1, 1]} />
-        <meshStandardMaterial roughness={0.5} metalness={0.1} />
+        <meshPhysicalMaterial
+          roughness={0.3}
+          metalness={0.0}
+          clearcoat={0.8}
+          clearcoatRoughness={0.2}
+          sheen={1.0}
+          sheenRoughness={0.3}
+          sheenColor="#ffffff"
+        />
       </instancedMesh>
-      
-      {/* 4b. GIFT RIBBONS */}
+
+      {/* 4b. GIFT RIBBONS - Satin ribbon look */}
       <instancedMesh ref={giftRibbonRef} args={[ribbonGeometry, undefined, giftIndices.length]} castShadow>
-         <meshPhysicalMaterial 
-            color="#FFD700" 
-            roughness={0.2} 
-            metalness={1.0} 
-            clearcoat={0.5}
-            emissive="#FFD700"
-            emissiveIntensity={0.2}
-         />
+        <meshPhysicalMaterial
+          color="#dc2626"
+          roughness={0.35}
+          metalness={0.0}
+          clearcoat={0.6}
+          clearcoatRoughness={0.15}
+          sheen={2.0}
+          sheenRoughness={0.25}
+          sheenColor="#ff6b6b"
+        />
       </instancedMesh>
 
       {/* 5. LIGHTS */}
@@ -299,4 +319,4 @@ export const Ornaments: React.FC = () => {
       </instancedMesh>
     </group>
   );
-};
+});

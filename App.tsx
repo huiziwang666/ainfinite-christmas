@@ -1,10 +1,9 @@
-import React from 'react';
 import { GameProvider } from './context/GameContext';
 import { Scene } from './components/Scene';
 import { UI } from './components/UI';
 import { HandTracker } from './components/HandTracker';
 
-const App: React.FC = () => {
+const App = () => {
   return (
     <GameProvider>
       <div className="w-full h-screen bg-slate-900 overflow-hidden relative selection:bg-emerald-500/30">

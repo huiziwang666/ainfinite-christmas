@@ -1,30 +1,23 @@
-import React from 'react';
+import { memo } from 'react';
 import { Canvas } from '@react-three/fiber';
-import { PerspectiveCamera, OrbitControls, Environment, Float } from '@react-three/drei';
+import { PerspectiveCamera, OrbitControls, Environment } from '@react-three/drei';
 import { EffectComposer, Bloom, Vignette } from '@react-three/postprocessing';
 import { Ornaments } from './Ornaments';
 import { SnowSystem } from './SnowSystem';
 import { Star } from './Star';
-import { useGame } from '../context/GameContext';
-import { GameState } from '../types';
 
-const Lights = () => (
+const Lights = memo(() => (
   <>
     <ambientLight intensity={0.1} />
-    {/* Main warm spot for gold highlights */}
     <spotLight position={[15, 25, 10]} angle={0.5} penumbra={1} intensity={2.5} castShadow color="#fffbeb" />
-    {/* Cool rim light for emerald depth */}
     <pointLight position={[-15, 10, -15]} intensity={1.5} color="#10b981" />
-    {/* Fill light */}
     <pointLight position={[0, -5, 10]} intensity={0.5} color="#fbbf24" />
   </>
-);
+));
 
-const BackgroundColor = () => {
-    return <color attach="background" args={['#020617']} />;
-}
+const BackgroundColor = memo(() => <color attach="background" args={['#020617']} />);
 
-export const Scene: React.FC = () => {
+export const Scene = memo(() => {
   return (
     <div className="w-full h-screen relative">
       <Canvas shadows dpr={[1, 2]}>
@@ -62,4 +55,4 @@ export const Scene: React.FC = () => {
       </Canvas>
     </div>
   );
-};
+});

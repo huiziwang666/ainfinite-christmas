@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import { memo, useEffect, useRef, useState, useCallback } from 'react';
 import { FilesetResolver, GestureRecognizer, GestureRecognizerResult } from '@mediapipe/tasks-vision';
 import { useGame } from '../context/GameContext';
 import { GameState } from '../types';
@@ -45,27 +45,25 @@ const isIndexFingerUp = (landmarks: any[]) => {
   return indexExtended && middleFolded && ringFolded && pinkyFolded;
 };
 
-export const HandTracker: React.FC = () => {
-  const { setGameState, gameState, showcaseConfig, triggerShowcase } = useGame();
+export const HandTracker = memo(() => {
+  const { setGameState, gameState, showcaseConfig, setIsIndexUp } = useGame();
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  
+
   const [isLoaded, setIsLoaded] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [cameraActive, setCameraActive] = useState(false);
   const [showDebug, setShowDebug] = useState(true);
   const [currentGesture, setCurrentGesture] = useState<string>('None');
-  
+
   const recognizerRef = useRef<GestureRecognizer | null>(null);
-  const requestRef = useRef<number>();
-  
+  const requestRef = useRef<number | undefined>(undefined);
+  const streamRef = useRef<MediaStream | null>(null);
+
   // Debounce logic
   const lastGestureRef = useRef<string>('None');
   const gestureFrameCount = useRef<number>(0);
   const CONFIDENCE_THRESHOLD = 5;
-
-  // Showcase Debounce
-  const lastShowcaseTime = useRef<number>(0);
 
   useEffect(() => {
     const init = async () => {
@@ -93,24 +91,31 @@ export const HandTracker: React.FC = () => {
     init();
 
     return () => {
-        if (requestRef.current) cancelAnimationFrame(requestRef.current);
+      if (requestRef.current) cancelAnimationFrame(requestRef.current);
+      // Cleanup stream tracks
+      if (streamRef.current) {
+        streamRef.current.getTracks().forEach(track => track.stop());
+      }
+      // Cleanup recognizer
+      recognizerRef.current?.close();
     };
   }, []);
 
-  const enableCam = async () => {
+  const enableCam = useCallback(async () => {
     if (!recognizerRef.current || !videoRef.current) return;
 
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ 
-          video: { width: 320, height: 240, frameRate: 30 } 
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { width: 320, height: 240, frameRate: 30 }
       });
+      streamRef.current = stream;
       videoRef.current.srcObject = stream;
       videoRef.current.addEventListener('loadeddata', predictWebcam);
       setCameraActive(true);
     } catch (err) {
       setError("Camera access denied");
     }
-  };
+  }, []);
 
   const drawSkeleton = (result: GestureRecognizerResult) => {
     const canvas = canvasRef.current;
@@ -224,17 +229,14 @@ export const HandTracker: React.FC = () => {
                         setGameState(GameState.TREE_SHAPE);
                      }
                      
-                     // --- SHOWCASE TRIGGER ---
-                     // Check for Tree Shape OR let Index Up force the tree state? 
-                     // For now, keep requirement that we must be in Tree Shape to spin.
-                     if (detectedGesture === 'Index_Up' && gameState === GameState.TREE_SHAPE && showcaseConfig.enabled) {
-                         const now = Date.now();
-                         // Reduce cooldown to 1s to allow continuous-like spinning if held
-                         // The animation is ~1.5s, so overlapping triggers will restart it, creating a continuous effect.
-                         if (now - lastShowcaseTime.current > 1000) { 
-                             triggerShowcase();
-                             lastShowcaseTime.current = now;
+                     // --- INDEX UP: Continuous spin ---
+                     if (detectedGesture === 'Index_Up' && showcaseConfig.enabled) {
+                         if (gameState !== GameState.TREE_SHAPE) {
+                             setGameState(GameState.TREE_SHAPE);
                          }
+                         setIsIndexUp(true);
+                     } else {
+                         setIsIndexUp(false);
                      }
                    }
                }
@@ -243,6 +245,7 @@ export const HandTracker: React.FC = () => {
                  if (gestureFrameCount.current > 0) gestureFrameCount.current = 0;
                  lastGestureRef.current = 'None';
                  setCurrentGesture('None');
+                 setIsIndexUp(false);
              }
          }
       }
@@ -326,4 +329,4 @@ export const HandTracker: React.FC = () => {
       </div>
     </div>
   );
-};
+});

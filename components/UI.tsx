@@ -1,66 +1,59 @@
-import React, { useRef, useEffect } from 'react';
+import { memo, useRef, useEffect, useCallback } from 'react';
 import { useGame } from '../context/GameContext';
 import { GameState } from '../types';
-import { Music, Volume2, Snowflake, Sparkles, MoveHorizontal, RotateCw } from 'lucide-react';
+import { Volume2, Snowflake, Sparkles, RotateCw, Music } from 'lucide-react';
 
-export const UI: React.FC = () => {
-  const { 
-    gameState, setGameState, 
+export const UI = memo(() => {
+  const {
+    gameState, setGameState,
     snowConfig, setSnowConfig,
     showcaseConfig, setShowcaseConfig,
     audioUrl, setAudioUrl,
     isPlaying, setIsPlaying,
     volume, setVolume
   } = useGame();
-  
+
   const fileInputRef = useRef<HTMLInputElement>(null);
   const audioRef = useRef<HTMLAudioElement>(null);
 
-  // Auto-play effect
+  // Auto-play effect - silently handle if blocked
   useEffect(() => {
     const audio = audioRef.current;
-    if (audio && audioUrl && isPlaying) {
+    if (audio && audioUrl) {
       audio.src = audioUrl;
       audio.volume = volume;
-      const playPromise = audio.play();
-      
-      if (playPromise !== undefined) {
-        playPromise.catch(error => {
-          console.log("Autoplay prevented by browser. User interaction required.");
-          setIsPlaying(false); // Update state to reflect reality
-        });
-      }
+      audio.play().catch(() => {});
     }
-  }, [audioUrl]); // Only run when URL changes (or on mount)
+  }, [audioUrl, volume]);
 
   // Watch isPlaying state changes
   useEffect(() => {
-      const audio = audioRef.current;
-      if (!audio) return;
-      
-      if (isPlaying && audio.paused) {
-          audio.play().catch(() => setIsPlaying(false));
-      } else if (!isPlaying && !audio.paused) {
-          audio.pause();
-      }
-  }, [isPlaying]);
+    const audio = audioRef.current;
+    if (!audio) return;
 
-  const toggleState = () => {
+    if (isPlaying && audio.paused) {
+      audio.play().catch(() => setIsPlaying(false));
+    } else if (!isPlaying && !audio.paused) {
+      audio.pause();
+    }
+  }, [isPlaying, setIsPlaying]);
+
+  const toggleState = useCallback(() => {
     setGameState(gameState === GameState.SCATTERED ? GameState.TREE_SHAPE : GameState.SCATTERED);
-  };
+  }, [gameState, setGameState]);
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
       const url = URL.createObjectURL(file);
       setAudioUrl(url);
       setIsPlaying(true);
     }
-  };
+  }, [setAudioUrl, setIsPlaying]);
 
-  const toggleMusic = () => {
+  const toggleMusic = useCallback(() => {
     setIsPlaying(!isPlaying);
-  };
+  }, [isPlaying, setIsPlaying]);
 
   const handleVolume = (e: React.ChangeEvent<HTMLInputElement>) => {
     const v = parseFloat(e.target.value);
@@ -71,13 +64,16 @@ export const UI: React.FC = () => {
   return (
     <>
       <audio ref={audioRef} loop />
-      
+
       <div className="absolute top-0 left-0 w-full p-6 flex justify-between items-start pointer-events-none z-40">
-        <div>
-          <h1 className="text-4xl text-white font-serif tracking-wider drop-shadow-[0_0_10px_rgba(255,255,255,0.5)]">
-            AInfinite <span className="text-emerald-400">Christmas</span>
-          </h1>
-          <p className="text-white/60 text-sm mt-1">Cast your spell to build the tree</p>
+        <div className="flex items-center gap-3">
+          <img src="/new-logo.png" alt="AInfinite Logo" className="w-14 h-14 drop-shadow-[0_0_10px_rgba(245,158,11,0.5)]" />
+          <div>
+            <h1 className="text-4xl font-serif tracking-wider drop-shadow-[0_0_10px_rgba(245,158,11,0.4)]">
+              <span className="text-amber-400">AInfinite</span> <span className="text-slate-200">Christmas</span>
+            </h1>
+            <p className="text-white/60 text-sm mt-1">Cast your spell to build the tree</p>
+          </div>
         </div>
 
         <div className="flex flex-col gap-4 pointer-events-auto items-end">
@@ -174,4 +170,4 @@ export const UI: React.FC = () => {
       </div>
     </>
   );
-};
+});

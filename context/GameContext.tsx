@@ -1,52 +1,52 @@
-import React, { createContext, useContext, useState, useRef, PropsWithChildren } from 'react';
+import { createContext, useContext, useState, useMemo, useCallback, PropsWithChildren } from 'react';
 import { GameState, GameContextType, SnowConfig, ShowcaseConfig } from '../types';
 
 const GameContext = createContext<GameContextType | undefined>(undefined);
 
-export const GameProvider: React.FC<PropsWithChildren> = ({ children }) => {
+export const GameProvider = ({ children }: PropsWithChildren) => {
   const [gameState, setGameState] = useState<GameState>(GameState.SCATTERED);
   const [snowConfig, setSnowConfig] = useState<SnowConfig>({
     enabled: true,
     count: 1500,
     speed: 1.0,
   });
-  
+
   const [showcaseConfig, setShowcaseConfig] = useState<ShowcaseConfig>({
     enabled: true,
-    duration: 1.5, // Faster default (1.5s)
+    duration: 1.5,
     triggerTimestamp: 0,
   });
 
-  // Default to a file path that would exist in the public folder
-  // In a real app, the user would place 'christmas_magic.mp3' in the public/ dir.
-  // For this demo, we can also use a reliable external URL as a fallback if the local one fails,
-  // but to satisfy "save to public folder", we reference the local path.
   const [audioUrl, setAudioUrl] = useState<string | null>('/christmas-christmas-background-music-441462.mp3');
   const [isPlaying, setIsPlaying] = useState(true);
   const [volume, setVolume] = useState(0.5);
+  const [isIndexUp, setIsIndexUp] = useState(false);
 
-  const triggerShowcase = () => {
+  const triggerShowcase = useCallback(() => {
     setShowcaseConfig(prev => ({ ...prev, triggerTimestamp: Date.now() }));
-  };
+  }, []);
+
+  // Memoize context value to prevent unnecessary re-renders
+  const value = useMemo<GameContextType>(() => ({
+    gameState,
+    setGameState,
+    snowConfig,
+    setSnowConfig,
+    showcaseConfig,
+    setShowcaseConfig,
+    triggerShowcase,
+    isIndexUp,
+    setIsIndexUp,
+    audioUrl,
+    setAudioUrl,
+    isPlaying,
+    setIsPlaying,
+    volume,
+    setVolume,
+  }), [gameState, snowConfig, showcaseConfig, triggerShowcase, isIndexUp, audioUrl, isPlaying, volume]);
 
   return (
-    <GameContext.Provider
-      value={{
-        gameState,
-        setGameState,
-        snowConfig,
-        setSnowConfig,
-        showcaseConfig,
-        setShowcaseConfig,
-        triggerShowcase,
-        audioUrl,
-        setAudioUrl,
-        isPlaying,
-        setIsPlaying,
-        volume,
-        setVolume,
-      }}
-    >
+    <GameContext.Provider value={value}>
       {children}
     </GameContext.Provider>
   );

@@ -1,5 +1,4 @@
 import * as THREE from 'three';
-import React from 'react';
 
 export enum GameState {
   SCATTERED = 'SCATTERED',
@@ -47,6 +46,8 @@ export interface GameContextType {
   showcaseConfig: ShowcaseConfig;
   setShowcaseConfig: (config: ShowcaseConfig) => void;
   triggerShowcase: () => void;
+  isIndexUp: boolean;
+  setIsIndexUp: (up: boolean) => void;
   audioUrl: string | null;
   setAudioUrl: (url: string | null) => void;
   isPlaying: boolean;
