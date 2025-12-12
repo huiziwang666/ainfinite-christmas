@@ -1,0 +1,7 @@
+{
+  "name": "AInfinite Christmas",
+  "description": "An interactive 3D Christmas experience where magical objects assemble into a tree using hand gestures.",
+  "requestFramePermissions": [
+    "camera"
+  ]
+}
